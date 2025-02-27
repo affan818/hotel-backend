@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cors from "cors";
 import Razorpay from "razorpay";
+import nodemailer from "nodemailer"; // ✅ Import Nodemailer
 import Booking from "./models/Booking.js";
 
 dotenv.config(); // Load environment variables
@@ -10,6 +11,10 @@ dotenv.config(); // Load environment variables
 const app = express();
 app.use(express.json()); // Middleware to parse JSON requests
 app.use(cors()); // Enable CORS for frontend requests
+
+// ✅ Debugging Logs for Environment Variables
+console.log("Mongo URI:", process.env.MONGO_URI);
+console.log("Razorpay Key:", process.env.RAZORPAY_KEY_ID);
 
 // ✅ Connect to MongoDB
 mongoose
@@ -23,26 +28,45 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
+// ✅ Nodemailer Setup (Gmail SMTP)
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER, // Your Gmail
+    pass: process.env.EMAIL_PASS, // App Password (Google-generated)
+  },
+});
+
+// ✅ Create Order (Razorpay)
 app.post("/create-order", async (req, res) => {
-  const { amount, name, email, mobile, showTime, personCount } = req.body;
+  // console.log("🔹 Received Order Creation Request:", req.body);
+
+  const { amount } = req.body;
+
+  if (!amount || isNaN(amount)) {
+    return res.status(400).json({ message: "Invalid amount!" });
+  }
 
   const options = {
-    amount: amount * 100, // Razorpay needs amount in paisa
+    amount: amount * 100, // Razorpay requires amount in paisa
     currency: "INR",
     receipt: `order_rcptid_${Date.now()}`,
   };
 
   try {
     const order = await razorpay.orders.create(options);
+    // console.log("✅ Order Created:", order);
     res.json({ id: order.id, amount });
   } catch (error) {
+    // console.error("❌ Order Creation Error:", error);
     res.status(500).json({ message: "Order creation failed", error });
   }
 });
 
-// Save Booking in Database
+// ✅ Save Booking in Database & Send Confirmation Email
 app.post("/save-booking", async (req, res) => {
-  console.log("Received Booking Data:", req.body); // Debug log
+  // console.log("🔹 Received Booking Request:", req.body);
+  // Log incoming request
 
   const {
     name,
@@ -66,7 +90,7 @@ app.post("/save-booking", async (req, res) => {
     mobile,
     showTime,
     date,
-    personCount, // Ensure it's saved
+    personCount,
     paymentId,
     orderId,
     amount,
@@ -74,24 +98,56 @@ app.post("/save-booking", async (req, res) => {
 
   try {
     await booking.save();
-    res.json({ message: "Booking saved successfully!" });
+    // console.log("✅ Booking Saved Successfully:", booking);
+
+    // ✅ Send Confirmation Email
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "🎟️ Booking Confirmation - Show Booking",
+      html: `
+        <h2>Hello ${name},</h2>
+        <p>Your booking has been confirmed.</p>
+        <p><strong>Date:</strong> ${date}</p>
+        <p><strong>Show Time:</strong> ${showTime}</p>
+        <p><strong>Person(s):</strong> ${personCount}</p>
+        <p><strong>Amount Paid:</strong> ₹${amount}</p>
+        <p>Thank you for choosing Us. We look forward to seeing you!</p>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      // console.log("✅ Confirmation Email Sent Successfully!");
+      res.json({ message: "Booking saved & confirmation email sent!" });
+    } catch (emailError) {
+      // console.error("❌ Error Sending Email:", emailError);
+      res
+        .status(500)
+        .json({ message: "Booking saved, but email failed!", emailError });
+    }
   } catch (error) {
+    // console.error("❌ Booking Save Error:", error);
     res.status(500).json({ message: "Error saving booking", error });
   }
 });
 
-// get booking
-
-// Get all bookings
+// ✅ Get all Bookings
 app.get("/get-bookings", async (req, res) => {
+  // console.log("🔹 Fetching All Bookings...");
+
   try {
     const bookings = await Booking.find().sort({ date: -1 });
+    // console.log(`✅ Found ${bookings.length} Bookings`);
     res.json(bookings);
   } catch (error) {
+    // console.error("❌ Error Fetching Bookings:", error);
     res.status(500).json({ message: "Error fetching bookings", error });
   }
 });
 
-// ✅ Server Listening
+// ✅ Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`http://localhost:${PORT}`));
+app.listen(PORT, () =>
+  console.log(`✅ Server running on http://localhost:${PORT}`)
+);
