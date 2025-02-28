@@ -32,8 +32,8 @@ const razorpay = new Razorpay({
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER, // Your Gmail
-    pass: process.env.EMAIL_PASS, // App Password (Google-generated)
+    user: "ansariaffan818@gmail.com", // Your Gmail
+    pass: "gytz jkvu vzsk kwce", // App Password (Google-generated)
   },
 });
 
@@ -102,7 +102,7 @@ app.post("/save-booking", async (req, res) => {
 
     // ✅ Send Confirmation Email
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: "ansariaffan818@gmail.com",
       to: email,
       subject: "🎟️ Booking Confirmation - Show Booking",
       html: `
